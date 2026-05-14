@@ -1,0 +1,12 @@
+# Core training stack (versions relaxed; pin in Colab if needed)
+torch>=2.0
+torchvision>=0.15
+numpy>=1.24
+Pillow>=10.0
+matplotlib>=3.7
+
+# COCO-style indoor object detection (typical choice)
+pycocotools>=2.0.6
+
+# Optional: LLM-written REPORT.md sections (exp_logging/openai_helper.py)
+openai>=1.0

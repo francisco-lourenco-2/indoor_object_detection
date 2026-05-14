@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Large / local dataset files (keep directory layout only in git)
+data/*
+!data/.gitkeep
+
+# Experiment outputs (same layout as OO_segmentation)
+work_dirs/
+
+# Checkpoints
+*.pt
+*.pth
+*.ckpt

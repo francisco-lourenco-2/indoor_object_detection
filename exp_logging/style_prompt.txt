@@ -1,0 +1,157 @@
+This experiment was performed the exact same way as “21 - View-GCN++ 40 views PCA aligned Revised Dataset new PoinWolf ALL DATA”, with the only difference being that the static categories were added to the dataset.
+
+Considering the underwhelming performance of the View-GCN++ + Pointnet depicted in “23 - View-GCN++ 40 views and PointNet PCA aligned”, PointNet was not used in this experiment.
+
+In this evaluation run, the colours correspond to the differences between this network and “21 - View-GCN++ 40 views PCA aligned Revised Dataset new PoinWolf ALL DATA” on the “HARD” dataset.
+    • 🟢 - Improved
+    • 🟡 - Stayed the same
+    • 🔴 - Declined
+My takeaways:
+In this experiment, we did not have as much success as for the properly aligned models. As we can see, there was a slight drop in low-level accuracy, while the high-level accuracy remained the same. In all trials, there was one to two confusions between static and non-static categories, which is not that bad, however, the addition of the static categories seems to have slightly negatively impacted the accuracy on some other non-static categories, even though there are no more direct confusions. Still, even though the slight drop in performance, we can still consider that the network is able to handle the static categories quite well even when they are not properly aligned.
+
+
+
+In this report, the results for the View-GCN and PointNet fusion under PCA aligned models are presented. The network was trained the same way as in the last experiment (“22 - View-GCN 20 views and PointNet”).
+
+PointNet was pretrained on the PCA aligned models using online PointWolf augmentation and reached a maximum low-level accuracy 77%.
+
+In this evaluation run, the colours correspond to the differences between this network and “21 - View-GCN++ 40 views PCA aligned Revised Dataset new PoinWolf ALL DATA” on the “HARD” dataset.
+    • 🟢 - Improved
+    • 🟡 - Stayed the same
+    • 🔴 - Declined
+My takeaways:
+As mentioned in the last report, the performance of the new classification solution decreased by using PointNet in parallel. In fact, I was already expecting the results to be worse, as PointNet is quite correlated with the meshes’ alignment, thus introducing rotation variance into the solution. The reason why I still moved forward with this approach was because I had hopes that the results would improve for the aligned models. As I’ve mentioned before, since we are already able to classify the models quite accurately on high-level categories, that means that we might be able to perform rotation estimation knowing only the meshes’ high-level category, meaning that, in case we don’t find a solution that is able to accurately find the unaligned mesh low-level category, we can always rotate it first, and then perform a second classification step on the already aligned model.
+
+Moreover, I’m confident that the rotation variance problem depicted in this experiment, is easily solvable by using the partial point cloud feature approach described on the last report (“22 - View-GCN 20 views and PointNet”), that is, the View-GCN and PointView-GCN fusion.
+
+
+
+
+
+
+The initial goal of this experiment was to evaluate how View-GCN++ with the 40 view setting performs on the PCA aligned models after the classification and evaluation datasets were revised, and also using all available data for training. However, after the first training session, the evaluation results were very underwhelming, and definitely below my expectations. Therefore, I decided to investigate why this training session was so unsuccessful but, before that, I double checked it by training the network again. For my surprise, after this second training session, the results were not only much better, but just as good as the results obtained on the last experiment (18 - View-GCN 20 views Revised Dataset ALL DATA), which makes even less sense given that in experiment “14 - View-GCN++ 40 views PCA aligned”, View-GCN++’s performance wasn’t as good on PCA aligned models as for the properly aligned ones. 
+
+At this point, I was very confused, so now I was investigating why the results were so good, just to find out that, I actually got those results by mistake, because I forgot to set the number of views to 40 in this experiment, meaning that View-GCN++ trained using the default 20 view setting. Out of luck, this worked because I have 40 views per model in the dataset, so the network could take 20 images per model at a time, and never mix images from different models in the same batch. Again, double checked it and the results were indeed very good, so now I knew that something related to the 20 view setting was definitely helping View-GCN++ in learning our 3D meshes. 
+
+For View-GCN++, the only difference that the chosen view setting does is the computed vertex features in one of the modules, the LocalGCN module, that establishes relationships between neighbouring views based on image features and vertex features. So, in View-GCN++, since it needs to be rotation invariant, it builds features based on the relative positions of the neighbouring points, and the problem starts here. In the 20 view setting, the relative positions between nearest neighbour vertices of the dodecahedron, are all the same because the vertices are equally displaced and, in fact, I noticed that this doesn’t make much sense when I implemented View-GCN++, because the computed features will all be the same no matter the chosen views, which means that the features will be constant throughout training. However, when we use the 40 view setting, as mentioned before, the vertices (view points) are not equally distant from each other, meaning that now, the computed features for neighbouring vertices will now actually depend on the chosen views. Therefore, to test if this was indeed the problem, I hardcoded the mentioned module so the computed vertex features are constant, and then trained View-GCN++ using the 40 view setting as supposed. It was a success 😀 I got the same very good results I obtained by mistake but now setting everything up properly. 
+
+
+
+
+
+In this evaluation run, the colored circles correspond to the differences between this network and “14 - View-GCN++ 40 views PCA aligned” on the “HARD” dataset.
+    • 🟢 - Improved
+    • 🟡 - Stayed the same
+    • 🔴 - Declined
+My takeaways:
+As mentioned above, in this experiment, I did a fix on View-GCN++. Such fix lead to the best ever results we got for the “HARD” evaluation dataset (91% low-level and 97% high-level) that now are just as good as for the “ALIGNED” one! Therefore,my main takeaway from this experiment is that we might get even better results on the “ALIGNED” dataset if we train View-GCN++ the same way as done on this experiment. Recall that, in the last experiment View-GCN (not ++) with the 20 view setting was used.
+
+
+
+
+
+
+Symmetry Aware and Base Plane Aided 3-Step Rotation Estimation
+Introduction:
+Following the plan proposed in Alternative methods for classification and rotation, two new experiments were conducted with the aim of improving the performance of the new rotation estimation solution still in development. As a reminder, the proposed solution included the already implemented and reported 3-Step rotation estimation (PCA + Flip Estimation + EPN) plus two additional steps/techniques that I believe can improve the estimator’s performance even further, namely symmetry and base plane detection. Therefore, in this document I am reporting the results obtained by introducing symmetry analysis and base plane detection into the 3-Step solution already described in PCA disambiguation with EPN.
+
+I believe we can find some improvements by adding these techniques to the solution because during my research on rotation estimation methods, I found that geometrical and deep learning based approaches could complement each other. This is because, although geometrical approaches such as PCA or base plane based upright orientation estimation are able to find “perfect” alignment in a lot of cases, such techniques are only able to do so by making assumptions about the 3D model’s geometry that, unfortunately, do not apply to all models. It is exactly when such conditions are not met that deep learning based approaches can be advantageous, allowing us to get good alignment even when geometry fails. I also find this approach to be intuitive in the sense that, when we align a 3D model manually, I believe we are intrinsically searching for symmetries as well as for a base plane and, only in the absence of those visual cues, we align the model based on our knowledge of the world, thus using our own non-artificial neural network.
+
+So, at this point, we already added PCA and posterior disambiguation to our EPN based solution, so now, we are going to look for two geometrical properties in our 3D models: symmetries and base plane. 
+
+As demonstrated in Alignment of 3D models, when a model has one or more planes of symmetry, it is guaranteed that PCA finds at least the same number of good alignment axis, which means that, after our first 2 steps of the 3-Step solution (PCA + Flip Estimation), we can check if the model is symmetric to any of the 3 reference planes xz, xy, and yz. If any symmetry is found, we know that the rotation on the reference axes forming the reflection planes is correct, meaning that we only need to find the rotation on the normal of that plane. For instance, if we find a symmetry on the zy plane (actually the most common one), we only need to find a rotation around the x axis, which is an easier task for EPN and also prevents it from applying further rotations on the z and y axis which would misalign the model. In short, we will be using symmetries for reducing degrees of freedom on the rotation estimation task.
+
+The other geometric property we will be looking for is the base plane of the model. When an animal or an object is in its upright position, there are expected points of contact with the floor, therefore, if we find where those points of contact are, we can easily infer the 3D model upright orientation which, similarly to when symmetries are found, reduces the problem to a single axis rotation. In this case, we only need to find a rotation around the y axis (normal to the reference floor). The only problem with this approach is that not all models stand in a regular position or do not even have planar feet and, in such cases it is very hard to find the points of contact. However, it is totally fine if we don’t find the base plane, because EPN can still estimate a rotation.
+
+Now, having stated how we can leverage geometric properties of the 3D models for improving our rotation estimation solution, let’s now see how the procedure will look like:
+
+
+
+Note that this is the complete draft of my proposed rotation estimation solution. I should also mention that this block diagram is not 100% accurate with the actual implementation of the method, as you will notice in the methodology. The goal of the diagram is to explain the logic used for selecting the best aligning method the simplest way possible. The main difference is that, in practice, the symmetry analysis is actually done before base plane detection. I do it this way so I can refine the model’s alignment based on the symmetries before trying to find the base plane, which reduces the chances of triggering false positives in base plane detection. Also, for the case when the base plane and one symmetry are found in the model, the diagram says that the model should be aligned, however, if the reflection plane coincides with the base plane, one degree of freedom is yet to be locked down (a rotation on the y axis) so, in practice, the model is only considered aligned if the base plane is found and reflection plane is either zy or xy. If the reflection plane coincides with the base plane (zx), the model is still being send for further alignment. 
+Methodology:
+Symmetry detection:
+As mentioned in the introduction, if the model has symmetries, PCA should find them. Therefore, any reflection plane present in the model should be already aligned with any of the reference planes after PCA and posterior disambiguation. This means that, we only need to check if the pre-aligned model (PCA + Flip estimation) is symmetric to any of the 3 reference planes xy, xz, and yz. To do so, n points are uniformly sampled from the model’s surface originating point cloud P. Then, P is splitted into two point clouds, each on each side of the query reference plane. For example, if we were checking if the model is symmetric to the zy plane, point cloud P is splitted into positive and negative x coordinates. Now, we only need to reflect one of the two point clouds and compare it with the other one. To compute similarity, the mean distance between closest points of the two point clouds is computed. If the two point clouds are identical, then we have a symmetry.
+
+Once this analysis is done, we decide the best way of aligning the model based on the number of symmetries found:
+
+    • 0 symmetries: Send for further processing - 3 degrees of freedom.
+    • 1 symmetry: Lock the estimated rotations on the axis forming the reflection plane and send it for further processing - 1 degree of freedom.
+    • 2+ -  Lock all three axes and finish the alignment process.
+Algorithm settings/details:
+    • Number of points being sampled from the meshe’s surface: 100k
+    • Symmetry Threshold: 0,01. This means that, when the two subject point clouds have a mean distance between closest points less than 0,01, we consider that the mesh is symmetric in respect to the subject reference plane. Also note that, for this analysis the mesh is being normalised so it fits inside a unit sphere, which means that 0,01 corresponds to 1% of the sphere radius length.
+
+Base plane detection:
+The current implementation of the base plane detection mechanism is an improved version of the method presented here Base plane finder, that also accounts for the number of points of contact of the model with the floor. In order to detect the base plane, we first pre-align the model using the symmetry aware 3-Step rotation estimation solution (PCA + Flip estimation + Symmetry aware EPN refinement), then we follow the steps below:
+
+    1. Compute the convex hull of the 3D model.
+    2. Remove every triangle on the positive y or whose normals deviate too much from the global floor. (We can do this because the model is pre-aligned)
+    3. Cluster triangles with similar normals in order to form candidate base planes.
+    4. For each triangle’s base plane, check the equilibrium condition, i.e, if the projected model’s center of mass lies inside it. Discard candidates that do not meet this condition.
+    5. Count how many points of contact there are between the model and the floor. Discard any candidate base plane with an unexpected number of points of contact. Note that, for bipeds we expect between 1 and 2 points of contact (some models are not touching the floor with both feet), for quadrupeds we expect 3 or 4, and so on… 
+    6. From the remaining candidate bases, select the one that offers more stability to the model, i.e, the base that makes it harder to tip the model over. This is done by calculating the “tip over” angle formed by points C’, C, and P. Where:
+C’ - Projected center of mass.
+C - Center of mass
+P - Closest edge of the candidate base boundary to the projected center of mass.
+
+Here’s a visual representation of the tip over angle:
+
+
+Note that this algorithm is intentionally designed to produce the minimum amount of false positives as possible, as it is considerably better to not find any base plane than finding the wrong one. Recall that, at this point, the models are already near optimal alignment and this step is only intended to do fine adjustments to the model alignment. Moreover, not all categories are expected to have a base plane, like flying models, bicycles, boats, and etc… For such categories, base plane detection is turned off.
+Algorithm settings/details:
+    • Angle threshold using in step 2: 45॰
+    • Clustering in step 3: To cluster triangles into candidate bases based on their normals, the normals are firstly converted to spherical coordinates, which allows us to plot the normals in 2D based on their polar and azimuthal angles. Then, DBSCAN is used to cluster points of the 2D plot with a max euclidean distance of 2॰.
+    • Number of points of contact used in step 5: To count the number of points of contact of the model with the floor, 100k points are firstly sampled from the meshes surface. Then we filter the points based on their distance to the candidate base, meaning that we remove every point with a distance larger than 0.03 from the candidate base (the mesh is normalised so it fits inside a unit sphere). Once we have our filtered point cloud, and considering that all these points should belong to the same plane, we can convert everything to 2D and then use DBSCAN in 2D to find clusters of points. Each cluster of points should belong to the same point of contact, i.e, feet, wheel, paw, etc. So the number of clusters found by DBSCAN should be the same as the number of points of contact.
+Single axis rotation estimation:
+I am adding this section just to briefly explain how single axis rotation estimation is being performed. As we saw in the sections above, depending on the subject geometric properties of the model, we might want to only rotate the model in one axis and, in such case, a modified version of EPN is used. The original EPN outputs a vector of size 4, which corresponds to the four coefficients of a quaternion, however, when we want to rotate the model in one single axis, we are only interested in one single value, which corresponds to one rotation around the axis of interest. Therefore, EPN is modified so it only regresses one value. Moreover, when training the modified EPN, we only augment the models with slight rotations on the axis of interest. The maximum angle for rotation augmentation varied between 30॰ (15॰ to each side) and 150 (75॰ to each side) depending on the category, as PCA works better for some categories than others but, I should say that I didn’t really noticed that much difference on accuracy when using large and small angles, so a good practice for the future would be to just set this angle high like 150॰ to improve the generalisation of the solution.
+
+I believe it is relevant to mention this because, this minor technicality implies that we will now have 3 more trained networks per alignment category, resulting in a total of 5 networks per alignment category (flip + xyz + x + y + z). This does not impact the inference time of the solution because only 2 of this networks will be used in inference, however, it will require more storage space (not sure if this is a problem, but I thought it would be good to mention 😅).
+Data and Augmentation:
+EPN was trained with the same data and augmentation as in the previous experiment PCA disambiguation with EPN. The only difference is that, since we are now interested in performing single axis rotations, the data was augmented accordingly for those cases.
+
+All categories will be added to this report, however, since it is taking a considerable amount of time to train all networks, I will post the already available results and I’ll be updating this report with new data as it comes out of the oven.
+
+The EPN’s were trained at the high alignment category level. The high-level alignment categories are groups of low-level categories whose alignments are consistent. Most high-level alignment categories coincide with the classification high-level categories, so I am only writing the classification high-level category for those ones but, when that’s not the case, you’ll see “<high-level category> type N”.
+Metric:
+As usual, the metric used in this report will be the Mean Angular Error (MAE) in degrees (॰). I’ll be also adding a new accuracy that measures how much estimates are below a 3॰ error.
+
+In the last report, I stopped doing the evaluations for 20 different rotations of each model because, since we now have PCA in the top of the pipeline and PCA is theoretically rotation invariant, rotating the model before should make no difference. However, as we know, PCA is ambiguous, meaning that we can get different results in different runs of the algorithm. Therefore, in this experiment I’ll run inference for each model 20 times with 20 different random rotations again, hopefully causing PCA to output different ambiguities and thus providing us with a more accurate accuracy measurement. Moreover, I’ll report results for the EPN only based solution here as well (for bipeds only), and since this solution is not perfectly rotation equivariant (as we saw on previous experiments), it makes sense that we test this solution for several different initial rotations of the models so, for the sake of compatibility between methods, we should test them in the exact same way.
+
+As requested, here’s an explanation of each metrics reported in the tables:
+    • FlAcc: It stands for Flip Accuracy, and reports the percentage of models whose PCA ambiguity was correctly identified by the EPN based flip estimator.
+
+    • MAE॰: This is our main metric, the Mean Angular Error in degrees. If we represent our predicted and ground truth rotations using euler angles, this metric calculates the mean error angle in each axis as follows:
+
+
+
+
+
+    • <1॰ (%), <3॰ (%), and <5॰ (%): These accuracies measure the percentage of predicted rotations that have an MAE॰ below 1॰, 3॰, and 5॰ respectively.
+Analysis:
+This time, I am adding the analysis before presenting the results just so you don’t have to scroll down 2 minutes to get to this section (a lot of tables down below), so if you would like to see the results before getting biased by my opinion you can just skip this section and get back to it later 😆. Also, we don’t have the results for all categories yet, but we can already see some interesting things going on. The first one is that the estimator described in this report (3-Step SA & BPA) did indeed improve our rotation estimation results. However, in some cases, the other estimators did better, which not only is totally fine, but it is also a good thing, because we can select the best estimator based on the 3D model category, thus providing us with alternatives when one estimator doesn’t work so well in one specific category. Therefore, when looking into the results, take the best estimator results as the ones we should expect in a final application. Again, note that with exception of the EPN only estimator (used for bipeds only), all estimators are just ablated version of the 3-Step SA & BPA estimator, meaning that the results obtained in this report were actually obtained with the same code by just turning on and off features.
+
+Now, focusing more on the results itself, even though the “<1॰”, “<3॰”, and “<5॰” scores do not look super appealing in some cases, it is very good to see that the overall median error for the 3-Step SA & BPA estimator is at 2.02॰, which means that, excluding a few outlier bad estimates caused by either wrong flip prediction or a difficult model to align, the estimator is very accurate. And this is only if we look in the overall perspective, because if we look into some specific categories, specially the most occurring ones such as bipeds and quadrupeds, we are actually getting near perfect alignment for almost all test models. Another important aspect to notice is that the EPN based flip estimation is working super well so far, with 100% accuracy for almost all categories which is actually the reason why we are getting such good results in all estimators. In fact, PCA and posterior disambiguation using flip estimation already gives us a very good alignment that, when aided by base plane alignment, even gets us better results in some categories than with the other EPN based estimators. This just shows us how powerful symmetries and the base plane can be in aligning a 3D model, which actually proves the concept of the proposed solution, that is, to use deep learning only when the 3D model doesn’t have these geometric properties.
+
+We should keep into account that, the size of our dataset is still very small, so the value of the reported results here is unfortunately not very good, because we are not only training EPN in very small amounts of data, but we are also evaluating it in just a few test models, so it is still soon to draw conclusions about the solutions presented here. Still, the results are looking very promising and we can always expect them to get better once we train the deep learning based estimators with more data so, I believe that as soon as we do so, the solution should be ready to be deployed.
+Results:
+Down below, I’ll be posting all results for all low-level categories and high-level categories. To enrich our comparative analysis, I am adding results for 6 different estimators, namely:
+    1. DPCA: Models are aligned using EPN disambiguated PCA only.
+    • PCA + Flip estimation.
+
+    2. DPCA & BPA: Models are aligned using EPN Disambiguated PCA and Base Plane.
+    • PCA + Flip estimation + Base Plane.
+
+    3. EPN: Models are aligned using EPN only. (Only for bipeds)
+
+    4. 3-Step: This is the solution presented in PCA disambiguation with EPN, where the models are aligned in 3 steps.
+    • PCA + Flip estimation + EPN.
+
+    5. 3-Step SA: This is the Symmetry Aware 3-Step solution, where we reduce degrees of freedom on EPN based on symmetries 
+    • PCA + Flip estimation + Symmetry Aware EPN.
+
+    6. 3-Step SA & BPA: This is the complete proposed rotation estimation solution described in this report, i.e, the Symmetry Aware and Base Plane Aided 3-Step Rotation Estimation solution.
+    • PCA + Flip estimation + Symmetry Aware EPN + Base Plane.
+ 
+I am only adding EPN results for the bipeds because I had these results available from the previous experiments. I am not gonna be adding EPN results for other categories because I don’t have trained models for those evaluations. Note that, the EPN’s used in the 3-Step based solution are only trained on a subset of the SO(3) space (group of all rotations) because they are being used to refine the rotation only, not to estimate a full rotation. Therefore, I can’t use the available trained networks for evaluating the EPN estimator. Indeed, I could train new EPN’s on the full SO(3), but that takes about one day to train per category, meaning that it is not possible to do so in a feasible amount of time, especially considering that I couldn't yet train all needed EPN’s for the 3-Step estimator.
+
+It is also worth mentioning that the estimators reported here are just ablated versions of the 3-Step SA & BPA estimator (except EPN only, estimator 3), so we can see how each component in the pipeline contributes for the final estimate.
