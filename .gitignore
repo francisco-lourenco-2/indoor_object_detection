@@ -14,8 +14,3 @@ data/*
 
 # YOLO export (symlinks to raw images under data/)
 prepared_data/
-
-# Checkpoints
-*.pt
-*.pth
-*.ckpt

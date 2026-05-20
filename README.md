@@ -50,7 +50,19 @@ Use a **GPU** for training. Notebook training uses `build_reports=False` (no Ope
 
 ## Google Colab
 
-Open the notebook in Colab, enable **Runtime → GPU**, clone/upload this repo, run all cells. The dataset is downloaded in-notebook; include `experiment_2/ckpts/best.pt` in the repo or Drive for the short demo training cell.
+1. **Runtime → Change runtime type → GPU**
+2. Run the **Colab bootstrap** cell (clone project), then **Setup**, then the rest top to bottom.
+
+**Clone error** (`could not read Username for 'https://github.com'`): the repo is **private**. Use one of:
+
+- **Make the repo public** (easiest for reviewers), then:
+  `git clone https://github.com/francisco-lourenco-2/dokusketch_indoor_object_detection_assignment.git /content/docusketch_assignment`
+- **Private repo:** Colab → **Secrets** (key icon) → add `GITHUB_TOKEN` (GitHub PAT with `repo` scope) → use **Option B** in the bootstrap cell.
+- **Google Drive:** zip the project, upload, unzip with **Option C** in the bootstrap cell.
+
+Repo URL: `https://github.com/francisco-lourenco-2/dokusketch_indoor_object_detection_assignment`
+
+The dataset is downloaded in-notebook. Ship `work_dirs/.../experiment_2/ckpts/best.pt` via Release or Drive for the demo training cell.
 
 ## Not in git (see `.gitignore`)
 
