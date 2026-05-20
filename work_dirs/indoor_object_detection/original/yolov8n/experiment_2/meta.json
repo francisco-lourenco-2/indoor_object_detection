@@ -1,0 +1,32 @@
+{
+  "level": 4,
+  "dataset": "indoor_object_detection",
+  "lv2_name": "original",
+  "lv3_name": "best",
+  "model": "/home/francisco/workspace/personal_projects/docusketch_assignment/work_dirs/indoor_object_detection/original/yolov8n/experiment_2/ckpts/best.pt",
+  "epochs": 10,
+  "imgsz": 640,
+  "batch": 16,
+  "device": "0",
+  "data_yaml": "/home/francisco/workspace/personal_projects/docusketch_assignment/prepared_data/yolo_indoor_object_detection/indoor.yaml",
+  "framework": "ultralytics-yolov8",
+  "seed": 42,
+  "augment": {
+    "hsv_h": 0.015,
+    "hsv_s": 0.7,
+    "hsv_v": 0.4,
+    "degrees": 0.0,
+    "translate": 0.1,
+    "scale": 0.5,
+    "shear": 0.0,
+    "perspective": 0.0,
+    "flipud": 0.0,
+    "fliplr": 0.5,
+    "mosaic": 1.0,
+    "mixup": 0.0,
+    "cutmix": 0.0,
+    "close_mosaic": 10
+  },
+  "lv4_name": "experiment_2",
+  "started_at": "2026-05-19 21:43:13"
+}

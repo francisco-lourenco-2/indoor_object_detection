@@ -1,4 +1,5 @@
 # exp_logging/openai_helper.py
+"""LLM summaries for experiment reports. Set OPENAI_API_KEY in the environment (never hardcode keys)."""
 import math
 import os
 import json
@@ -15,6 +16,14 @@ except Exception:
 
 
 FALLBACK_THRESHOLD_MAP = 0.50  # tweak to your bar for "adopt"
+
+
+def _openai_client():
+    """Return an OpenAI client when OPENAI_API_KEY is set, else None."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key or OpenAI is None:
+        return None
+    return OpenAI(api_key=api_key)
 
 
 def _test_map(test: dict) -> float | None:
@@ -130,10 +139,10 @@ def _rollup_fallback(user_json_payload: dict) -> Tuple[str, str]:
 
 def _responses_json(system_prompt: str, user_json_payload: dict, keys=("overview","conclusion")):
     """Shared tiny wrapper; falls back to compact deterministic text on errors/missing key."""
-    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
+    client = _openai_client()
+    if client is None:
         return _rollup_fallback(user_json_payload)
 
-    client = OpenAI()
     try:
         resp = client.responses.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4o"),
@@ -220,9 +229,6 @@ def summarize_and_conclude(meta: dict, metrics: dict, answers: dict) -> Tuple[st
     if _answers_empty(answers):
         return "", ""
 
-    if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
-        return _fallback(meta, metrics, answers)
-
     # Build the input we’ll feed the model
     style = _load_optional_style_prompt()
     style_snippet = f"\nStyle notes:\n{style}" if style else ""
@@ -279,8 +285,10 @@ def summarize_and_conclude(meta: dict, metrics: dict, answers: dict) -> Tuple[st
         '- Output JSON ONLY with keys: "summary", "conclusion".\n'
     ).strip()
 
-    # Call the Responses API (official SDK)
-    client = OpenAI()
+    client = _openai_client()
+    if client is None:
+        return _fallback(meta, metrics, answers)
+
     model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
     try:
         resp = client.responses.create(

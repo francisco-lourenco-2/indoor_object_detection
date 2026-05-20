@@ -1,0 +1,16 @@
+2026-05-19 21:40:56,385 | INFO | Logging to: work_dirs/indoor_object_detection/original/best/experiment_1.__tmp__/train.log
+2026-05-19 21:40:56,386 | INFO | YOLO data yaml: /home/francisco/workspace/personal_projects/docusketch_assignment/prepared_data/yolo_indoor_object_detection/indoor.yaml
+2026-05-19 21:40:56,430 | INFO | Starting Ultralytics training: {'data': '/home/francisco/workspace/personal_projects/docusketch_assignment/prepared_data/yolo_indoor_object_detection/indoor.yaml', 'epochs': 5, 'imgsz': 640, 'batch': 16, 'device': '0', 'project': '/home/francisco/workspace/personal_projects/docusketch_assignment/work_dirs/indoor_object_detection/original/best/experiment_1.__tmp__', 'name': 'yolo_train', 'exist_ok': True, 'pretrained': True, 'patience': 20, 'save': True, 'plots': True, 'verbose': True, 'seed': 42, 'hsv_h': 0.015, 'hsv_s': 0.7, 'hsv_v': 0.4, 'degrees': 0.0, 'translate': 0.1, 'scale': 0.5, 'shear': 0.0, 'perspective': 0.0, 'flipud': 0.0, 'fliplr': 0.5, 'mosaic': 1.0, 'mixup': 0.0, 'cutmix': 0.0, 'close_mosaic': 10}
+2026-05-19 21:41:09,985 | INFO | Epoch 001 | train_loss=1.7878 | val_loss=1.8441 | val mAP=0.8406 AP50=0.9864 AP75=0.9706
+2026-05-19 21:41:17,011 | INFO | Epoch 002 | train_loss=1.8179 | val_loss=1.8711 | val mAP=0.8350 AP50=0.9878 AP75=0.9670
+2026-05-19 21:41:25,115 | INFO | Epoch 003 | train_loss=1.8467 | val_loss=1.8875 | val mAP=0.8404 AP50=0.9894 AP75=0.9647
+2026-05-19 21:41:33,500 | INFO | Epoch 004 | train_loss=1.8347 | val_loss=1.8556 | val mAP=0.8377 AP50=0.9854 AP75=0.9711
+2026-05-19 21:41:41,231 | INFO | Epoch 005 | train_loss=1.7789 | val_loss=1.8053 | val mAP=0.8574 AP50=0.9862 AP75=0.9727
+2026-05-19 21:41:43,870 | INFO | Ultralytics save_dir: /home/francisco/workspace/personal_projects/docusketch_assignment/work_dirs/indoor_object_detection/original/best/experiment_1.__tmp__/yolo_train
+2026-05-19 21:41:43,875 | INFO | Best weights copied to work_dirs/indoor_object_detection/original/best/experiment_1.__tmp__/ckpts/best.pt
+2026-05-19 21:41:43,904 | INFO | Evaluating on split=val ...
+2026-05-19 21:41:47,904 | INFO | [VAL] mAP=0.8584 | AP50=0.9862 | AP75=0.9712 | precision=0.9733 | recall=0.9654
+2026-05-19 21:41:47,910 | INFO | Evaluating on split=test ...
+2026-05-19 21:41:51,584 | INFO | [TEST] mAP=0.8414 | AP50=0.9834 | AP75=0.9534 | precision=0.9674 | recall=0.9670
+2026-05-19 21:41:51,586 | INFO | [TEST] mAP=0.8414 | AP50=0.9834 | AP75=0.9534 | precision=0.9674 | recall=0.9670
+2026-05-19 21:42:00,983 | INFO | Training complete. Ultralytics run: /home/francisco/workspace/personal_projects/docusketch_assignment/work_dirs/indoor_object_detection/original/best/experiment_1.__tmp__/yolo_train

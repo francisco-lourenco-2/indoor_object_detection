@@ -49,10 +49,14 @@ def begin_experiment_session(meta:dict)->Session:
     write_json(meta, tmp_dir/"meta.json")
     return Session(meta=meta, work_dir=final_dir, temp_dir=tmp_dir)
 
-def register_sigint_handler(session:Session):
+def register_sigint_handler(session: Session):
     def handler(sig, frame):
         print("\n[SIGINT] Training interrupted.")
-        _post_training_prompt(session)
+        finalize_experiment_session(
+            session,
+            build_reports=bool(session.meta.get("build_reports", False)),
+        )
+
     signal.signal(signal.SIGINT, handler)
 
 def _parse_test_results(dir: Path):
@@ -106,7 +110,7 @@ def commit_experiment_session(
     *,
     keep: bool,
     answers: dict | None = None,
-    build_reports: bool = True,
+    build_reports: bool = False,
 ) -> Path | None:
     """Move temp run into ``experiment_N/``; optionally write answers and reports."""
     tmp = session.temp_dir
@@ -128,7 +132,7 @@ def commit_experiment_session(
     os.replace(tmp, dest)
 
     if answers is None:
-        answers = ask_questions(session.meta["level"])
+        answers = ask_questions(session.meta["level"]) if build_reports else {}
     write_json(answers, session.work_dir / "answers.json")
 
     existing_results = read_json(session.work_dir / "results.json", {})
@@ -157,14 +161,15 @@ def finalize_experiment_session(
     *,
     keep: bool | None = None,
     answers: dict | None = None,
-    build_reports: bool = True,
+    build_reports: bool = False,
     exit_on_finish: bool = True,
 ) -> Path | None:
     """
     Finalize an experiment session after training.
 
     If ``keep`` is None, prompts on the terminal. Set ``exit_on_finish=False`` when
-    calling from a notebook so the kernel is not terminated.
+    calling from a notebook so the kernel is not terminated. Default ``build_reports=False``
+    skips REPORT.md generation (no OpenAI usage).
     """
     if keep is None:
         print("\nGenerate report and keep logs? [y/N]")
@@ -179,4 +184,7 @@ def finalize_experiment_session(
 
 
 def _post_training_prompt(session: Session) -> None:
-    finalize_experiment_session(session)
+    finalize_experiment_session(
+        session,
+        build_reports=bool(session.meta.get("build_reports", False)),
+    )

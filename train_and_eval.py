@@ -577,15 +577,18 @@ def run_training(
     lv3_name: str | None = None,
     answers: dict[str, str] | None = None,
     interactive: bool = False,
+    build_reports: bool = False,
 ) -> TrainingResult:
     """
     Train YOLOv8 with experiment logging.
 
     Notebook / API: set ``data_variation`` (Lv2 folder under ``work_dirs/<dataset>/``) and
     optional ``answers``. Dataset name, network tag (from ``model``), and ``experiment_N``
-    are inferred automatically.
+    are inferred automatically. Default ``build_reports=False`` skips REPORT.md / rollups
+    (no OpenAI calls; suitable for Colab).
 
     Terminal: ``interactive=True`` prompts for experiment level and Lv2/Lv3 names.
+    Pass ``build_reports=True`` locally when ``OPENAI_API_KEY`` is set and you want reports.
 
     Returns the saved experiment directory under ``work_dirs/``.
     """
@@ -628,6 +631,7 @@ def run_training(
 
     meta.update(
         {
+            "build_reports": build_reports,
             "model": model,
             "epochs": epochs,
             "imgsz": imgsz,
@@ -686,7 +690,7 @@ def run_training(
         session,
         keep=True,
         answers=None if interactive else {},
-        build_reports=True,
+        build_reports=build_reports,
         exit_on_finish=False,
     )
     assert saved_dir is not None
@@ -725,6 +729,11 @@ def main() -> None:
         action="store_true",
         help="Print our one-line epoch summary (default: off; Ultralytics table only)",
     )
+    parser.add_argument(
+        "--reports",
+        action="store_true",
+        help="Generate REPORT.md and rollups (requires OPENAI_API_KEY for LLM sections)",
+    )
     args = parser.parse_args()
 
     if args.non_interactive:
@@ -742,6 +751,7 @@ def main() -> None:
             n_overlay=args.n_overlay,
             log_epoch_summary=args.log_epoch_summary or LOG_CUSTOM_EPOCH_SUMMARY,
             lv3_name=lv3,
+            build_reports=args.reports,
         )
         return
 
@@ -817,7 +827,7 @@ def main() -> None:
         logging.info("Interrupted; finalize prompt will run via SIGINT handler.")
         raise
 
-    finalize_experiment_session(session)
+    finalize_experiment_session(session, build_reports=True)
 
 
 if __name__ == "__main__":
