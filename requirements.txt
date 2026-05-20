@@ -3,10 +3,21 @@ torch>=2.0
 torchvision>=0.15
 numpy>=1.24
 Pillow>=10.0
+opencv-python>=4.8
 matplotlib>=3.7
+ipywidgets>=8.0
 
 # COCO-style indoor object detection (typical choice)
 pycocotools>=2.0.6
 
 # Optional: LLM-written REPORT.md sections (exp_logging/openai_helper.py)
 openai>=1.0
+
+# Dataset split ILP (generate_splits.py)
+pulp>=2.7
+
+# YOLOv8 training (train_and_eval.py)
+ultralytics>=8.0
+
+# Dataset YAML (prepare_yolo_dataset.py, visualize_predictions.py)
+PyYAML>=6.0

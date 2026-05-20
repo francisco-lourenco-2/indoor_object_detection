@@ -1,4 +1,5 @@
 # exp_logging/openai_helper.py
+import math
 import os
 import json
 import re
@@ -13,29 +14,35 @@ except Exception:
     APIError = RateLimitError = APITimeoutError = Exception  # type: ignore
 
 
-FALLBACK_THRESHOLD_MIOU = 0.50  # tweak to your bar for "adopt"
+FALLBACK_THRESHOLD_MAP = 0.50  # tweak to your bar for "adopt"
+
+
+def _test_map(test: dict) -> float | None:
+    for key in ("mAP", "mIoU"):
+        try:
+            v = float((test or {}).get(key))
+            if math.isfinite(v):
+                return v
+        except (TypeError, ValueError):
+            pass
+    return None
 
 
 def _fallback(meta: dict, metrics: dict, answers: dict) -> Tuple[str, str]:
     """Minimal, deterministic fallback when API key is missing or API fails."""
     goal = next(iter(answers.values()), "").strip()
     test = metrics.get("test", {}) or {}
-    miou = test.get("mIoU", "?")
-    try:
-        miou_f = float(miou)
-        miou_str = f"{miou_f:.3f}"
-    except Exception:
-        miou_f = None
-        miou_str = str(miou)
+    map_f = _test_map(test)
+    map_str = f"{map_f:.3f}" if map_f is not None else "?"
 
     changed = answers.get("What changed compared to the baseline/previous best?", "") or "N/A"
     summary = f"{meta.get('lv4_name','experiment')}: {goal}\nChanges: {changed}"
 
     rec = "keep iterating"
-    if isinstance(miou_f, float):
-        rec = "adopt" if miou_f >= FALLBACK_THRESHOLD_MIOU else "keep iterating"
+    if map_f is not None:
+        rec = "adopt" if map_f >= FALLBACK_THRESHOLD_MAP else "keep iterating"
 
-    conclusion = f"Test mIoU={miou_str}. Recommended: {rec}."
+    conclusion = f"Test mAP={map_str}. Recommended: {rec}."
     return summary, conclusion
 
 
@@ -73,15 +80,58 @@ def _defence_json(txt: str) -> str:
     return txt
 
 
+def _answers_empty(answers: dict | None) -> bool:
+    if not answers:
+        return True
+    return not any(str(v).strip() for v in answers.values())
+
+
+def _rollup_metrics_only(user_json_payload: dict) -> Tuple[str, str]:
+    """Values-only overview / conclusion (no narrative)."""
+    best = user_json_payload.get("best", {})
+    best_map = best.get("mAP", best.get("mIoU", best.get("best_mAP")))
+    map_s = f"{float(best_map):.3f}" if isinstance(best_map, (int, float)) else "?"
+    name = best.get("name", best.get("lv3_name", "?"))
+    path = best.get("path", "?")
+    overview = f"best_mAP: {map_s}\nbest_experiment: {name}"
+    conclusion = f"path: {path}"
+    return overview, conclusion
+
+
+def _experiments_in_payload(payload: dict) -> list:
+    if payload.get("experiments"):
+        return list(payload["experiments"])
+    out: list = []
+    for net in payload.get("networks", []) or []:
+        out.extend(net.get("experiments", []))
+    return out
+
+
+def _payload_uses_metrics_only(payload: dict) -> bool:
+    exps = _experiments_in_payload(payload)
+    return not exps or all(_answers_empty(e.get("answers")) for e in exps)
+
+
+def _rollup_fallback(user_json_payload: dict) -> Tuple[str, str]:
+    if _payload_uses_metrics_only(user_json_payload):
+        return _rollup_metrics_only(user_json_payload)
+
+    exps = user_json_payload.get("experiments", []) or user_json_payload.get("networks", [])
+    best = user_json_payload.get("best", {})
+    best_map = best.get("mAP", best.get("mIoU", best.get("best_mAP", "?")))
+    ov = f"{len(exps)} experiments. Best mAP={best_map} ({best.get('name', best.get('lv3_name', '?'))})."
+    co = (
+        f"Use {best.get('path', '?')} in production."
+        if isinstance(best_map, (int, float))
+        else "Keep iterating."
+    )
+    return ov, co
+
+
 def _responses_json(system_prompt: str, user_json_payload: dict, keys=("overview","conclusion")):
     """Shared tiny wrapper; falls back to compact deterministic text on errors/missing key."""
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
-        # ultra-compact deterministic fallback
-        exps = user_json_payload.get("experiments", [])
-        best = user_json_payload.get("best", {})
-        ov = f"{len(exps)} experiments. Best mIoU={best.get('mIoU','?')} ({best.get('name','?')})."
-        co = f"Use {best.get('path','?')} in production." if isinstance(best.get("mIoU",None),(int,float)) else "Keep iterating."
-        return ov, co
+        return _rollup_fallback(user_json_payload)
 
     client = OpenAI()
     try:
@@ -99,62 +149,66 @@ def _responses_json(system_prompt: str, user_json_payload: dict, keys=("overview
         return (str(data.get(keys[0],"")).strip() or "",
                 str(data.get(keys[1],"")).strip() or "")
     except Exception:
-        # same deterministic fallback
-        exps = user_json_payload.get("experiments", [])
-        best = user_json_payload.get("best", {})
-        ov = f"{len(exps)} experiments. Best mIoU={best.get('mIoU','?')} ({best.get('name','?')})."
-        co = f"Use {best.get('path','?')} in production." if isinstance(best.get("mIoU",None),(int,float)) else "Keep iterating."
-        return ov, co
+        return _rollup_fallback(user_json_payload)
 
 
 def summarize_lv3(meta_lv3: dict, experiments: list, best: dict):
     """
     meta_lv3: {dataset, lv2_name, lv3_name}
-    experiments: [{"name","path","mIoU","pixAcc","loss","answers"}]
-    best: {"name","path","mIoU"}
+    experiments: [{"name","path","mAP","AP50","AP75","precision","recall","answers"}]
+    best: {"name","path","mAP"}
     """
     system = (
-        "You write concise, presentation-ready rollups for model-level (Level 3) results in a roof-segmentation project.\n"
+        "You write concise, presentation-ready rollups for model-level (Level 3) results in an "
+        "indoor object-detection project (YOLO / COCO-style metrics).\n"
         "Output STRICT JSON with keys: overview, conclusion. No markdown, no extra keys.\n"
         "overview: 2–5 sentences describing WHAT model was explored and WHY (infer from answers),\n"
-        "          plus a short synthesis of results across Level-4 runs focusing on test mIoU.\n"
+        "          plus a short synthesis of results across Level-4 runs focusing on test mAP.\n"
         "conclusion: 1–3 sentences naming the best L4 experiment and whether to continue or adopt."
     )
     payload = {"level":3, "meta":meta_lv3, "experiments":experiments, "best":best}
+    if _payload_uses_metrics_only(payload):
+        return _rollup_metrics_only(payload)
     return _responses_json(system, payload)
 
 
 def summarize_lv2(meta_lv2: dict, lv3_summaries: list, best: dict):
     """
     meta_lv2: {dataset, lv2_name}
-    lv3_summaries: [{"lv3_name","best_mIoU","experiments":[...]}]
-    best: {"lv3_name","best_mIoU"}
+    lv3_summaries: [{"lv3_name","best_mAP","experiments":[...]}]
+    best: {"lv3_name","best_mAP"}
     """
     system = (
-        "You write concise, presentation-ready rollups for data-level (Level 2) results.\n"
+        "You write concise, presentation-ready rollups for data-level (Level 2) results in an "
+        "indoor object-detection project.\n"
         "Output STRICT JSON with keys: overview, conclusion.\n"
         "overview: 2–5 sentences explaining WHAT data-related change was done and WHY (use per-experiment answers),\n"
-        "          then compare networks by their best test mIoU.\n"
+        "          then compare networks by their best test mAP.\n"
         "conclusion: 1–3 sentences naming the best-performing network for this data setting and next steps."
     )
     payload = {"level":2, "meta":meta_lv2, "networks":lv3_summaries, "best":best}
+    if _payload_uses_metrics_only(payload):
+        return _rollup_metrics_only(payload)
     return _responses_json(system, payload)
 
 
 def summarize_lv1(meta_lv1: dict, all_experiments: list, best: dict):
     """
     meta_lv1: {dataset}
-    all_experiments: [{"lv2","lv3","name","path","mIoU","answers"}]  # across whole dataset
-    best: {"lv2","lv3","name","path","mIoU"}
+    all_experiments: [{"lv2","lv3","name","path","mAP","answers"}]  # across whole dataset
+    best: {"lv2","lv3","name","path","mAP"}
     """
     system = (
-        "You write concise, presentation-ready dataset-level (Level 1) summaries.\n"
+        "You write concise, presentation-ready dataset-level (Level 1) summaries for an "
+        "indoor object-detection project.\n"
         "Output STRICT JSON with keys: overview, conclusion.\n"
         "overview: 3–6 sentences giving a high-level narrative of goals/challenges on this dataset\n"
-        "          and a brief review of experiments across data modes and networks; focus on test mIoU only.\n"
+        "          and a brief review of experiments across data modes and networks; focus on test mAP only.\n"
         "conclusion: 1–3 sentences naming the best solution and recommending production usage."
     )
     payload = {"level":1, "meta":meta_lv1, "experiments":all_experiments, "best":best}
+    if _payload_uses_metrics_only(payload):
+        return _rollup_metrics_only(payload)
     return _responses_json(system, payload)
 
 
@@ -163,6 +217,9 @@ def summarize_and_conclude(meta: dict, metrics: dict, answers: dict) -> Tuple[st
     Returns (summary, conclusion) strings.
     Uses OpenAI Responses API when OPENAI_API_KEY is set; otherwise falls back.
     """
+    if _answers_empty(answers):
+        return "", ""
+
     if not os.getenv("OPENAI_API_KEY") or OpenAI is None:
         return _fallback(meta, metrics, answers)
 
@@ -192,7 +249,7 @@ def summarize_and_conclude(meta: dict, metrics: dict, answers: dict) -> Tuple[st
             "scheduler": meta.get("scheduler"),
         },
         "results": {
-            "test": test  # expected keys: loss, mIoU, pixel_acc, maybe per-class IoUs elsewhere
+            "test": test  # expected keys: mAP, AP50, AP75, precision, recall
         },
         "answers": answers,  # your 3–5 answers captured after training
     }
@@ -200,7 +257,7 @@ def summarize_and_conclude(meta: dict, metrics: dict, answers: dict) -> Tuple[st
     # System instructions: short, non-fluffy; professional tone
     system_instructions = textwrap.dedent(
         "You are an assistant that writes concise, professional experiment summaries for a\n"
-        "computer-vision segmentation project. Your writing should be:\n"
+        "computer-vision object-detection project. Your writing should be:\n"
         "- short, precise, and presentation-ready,\n"
         "- non-fluffy, with concrete statements,\n"
         "- easy to read for an engineering audience,\n"
@@ -217,7 +274,7 @@ def summarize_and_conclude(meta: dict, metrics: dict, answers: dict) -> Tuple[st
         "Requirements:\n"
         "- Keep it concise.\n"
         "- Avoid speculation: if something is unknown, omit it.\n"
-        "- Base the verdict primarily on test mIoU; mention it explicitly.\n"
+        "- Base the verdict primarily on test mAP (mean AP @ IoU 0.5:0.95); mention it explicitly.\n"
         "- If improvements depend on data or setup changes, say it plainly (short).\n"
         '- Output JSON ONLY with keys: "summary", "conclusion".\n'
     ).strip()

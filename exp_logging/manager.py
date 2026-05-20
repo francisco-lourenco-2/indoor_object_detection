@@ -57,8 +57,9 @@ def register_sigint_handler(session:Session):
 
 def _parse_test_results(dir: Path):
     """
-    Extract the last summary test line: "[TEST] loss=... | mIoU=... | pixAcc=...".
-    Ignores per-class lines like "[TEST] IoU/class: ...".
+    Extract the last summary test line, e.g.
+    ``[TEST] mAP=... | AP50=... | AP75=... | precision=... | recall=...``.
+    Legacy lines with mIoU/pixAcc/loss are still accepted (mIoU aliases mAP).
     """
     log = dir / "train.log"
     out = {"test": {}}
@@ -66,55 +67,70 @@ def _parse_test_results(dir: Path):
         return out
     lines = log.read_text().splitlines()
     for line in reversed(lines):
-        if "[TEST]" in line and "loss=" in line and "mIoU=" in line:
-            seg = line.split("[TEST]", 1)[1]
-            parts = {}
-            for kv in seg.split("|"):
-                kv = kv.strip()
-                if "=" in kv:
-                    k, v = kv.split("=", 1)
-                    parts[k.strip()] = v.strip()
-            def _num(key):
-                try:
-                    v = float(parts.get(key, "nan"))
-                    return v if math.isfinite(v) else float("nan")
-                except Exception:
-                    return float("nan")
-            out["test"] = {"loss": _num("loss"),
-                           "mIoU": _num("mIoU"),
-                           "pixel_acc": _num("pixAcc")}
-            break
+        if "[TEST]" not in line:
+            continue
+        seg = line.split("[TEST]", 1)[1]
+        parts = {}
+        for kv in seg.split("|"):
+            kv = kv.strip()
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                parts[k.strip()] = v.strip()
+
+        def _num(key):
+            try:
+                v = float(parts.get(key, "nan"))
+                return v if math.isfinite(v) else float("nan")
+            except Exception:
+                return float("nan")
+
+        mAP = _num("mAP")
+        if not math.isfinite(mAP):
+            mAP = _num("mIoU")
+
+        if not math.isfinite(mAP):
+            continue
+
+        out["test"] = {
+            "mAP": mAP,
+            "AP50": _num("AP50"),
+            "AP75": _num("AP75"),
+            "precision": _num("precision"),
+            "recall": _num("recall"),
+        }
+        break
     return out
 
-def _post_training_prompt(session: Session):
+def commit_experiment_session(
+    session: Session,
+    *,
+    keep: bool,
+    answers: dict | None = None,
+    build_reports: bool = True,
+) -> Path | None:
+    """Move temp run into ``experiment_N/``; optionally write answers and reports."""
     tmp = session.temp_dir
-    print("\nGenerate report and keep logs? [y/N]")
-    keep = input("> ").strip().lower().startswith("y")
     if not keep:
         rm_tree(tmp)
         print("Discarded.")
-        sys.exit(0)
+        return None
 
-    # Ensure destination name is free; if not, choose the next free one
     ensure_dir(session.work_dir.parent)
     dest = session.work_dir
     if dest.exists():
         base = dest.parent
         new_lv4 = _auto_lv4_name(base)
         session.meta["lv4_name"] = new_lv4
-        # persist the new name in meta.json inside TMP before moving
         write_json(session.meta, tmp / "meta.json")
         dest = base / new_lv4
         session.work_dir = dest
 
-    # atomic move
     os.replace(tmp, dest)
 
-    # ask ≤5 questions and save
-    answers = ask_questions(session.meta["level"])
+    if answers is None:
+        answers = ask_questions(session.meta["level"])
     write_json(answers, session.work_dir / "answers.json")
 
-    # parse last [TEST] line -> results.json (merge with existing results if present)
     existing_results = read_json(session.work_dir / "results.json", {})
     parsed = _parse_test_results(session.work_dir)
     if not existing_results:
@@ -125,12 +141,42 @@ def _post_training_prompt(session: Session):
             existing_results.setdefault("test", {}).update(parsed_test)
     write_json(existing_results, session.work_dir / "results.json")
 
-    # build Lv4 + rollups
-    build_lv4_report(session.work_dir)
-    build_rollups(session.work_dir)
+    if build_reports:
+        import importlib
+        import exp_logging.report_builder as _report_builder
+
+        importlib.reload(_report_builder)
+        _report_builder.build_lv4_report(session.work_dir)
+        _report_builder.build_rollups(session.work_dir)
     print(f"Saved: {session.work_dir}")
-    sys.exit(0)
+    return session.work_dir
 
 
-def finalize_experiment_session(session:Session, build_reports:bool=True):
-    _post_training_prompt(session)
+def finalize_experiment_session(
+    session: Session,
+    *,
+    keep: bool | None = None,
+    answers: dict | None = None,
+    build_reports: bool = True,
+    exit_on_finish: bool = True,
+) -> Path | None:
+    """
+    Finalize an experiment session after training.
+
+    If ``keep`` is None, prompts on the terminal. Set ``exit_on_finish=False`` when
+    calling from a notebook so the kernel is not terminated.
+    """
+    if keep is None:
+        print("\nGenerate report and keep logs? [y/N]")
+        keep = input("> ").strip().lower().startswith("y")
+
+    work_dir = commit_experiment_session(
+        session, keep=keep, answers=answers, build_reports=build_reports
+    )
+    if exit_on_finish:
+        sys.exit(0)
+    return work_dir
+
+
+def _post_training_prompt(session: Session) -> None:
+    finalize_experiment_session(session)
