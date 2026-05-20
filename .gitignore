@@ -15,9 +15,6 @@ data/*
 # YOLO export (symlinks to raw images under data/)
 prepared_data/
 
-# Experiment outputs (same layout as OO_segmentation)
-work_dirs/
-
 # Checkpoints
 *.pt
 *.pth
