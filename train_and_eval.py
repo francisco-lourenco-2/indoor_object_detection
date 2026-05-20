@@ -26,7 +26,21 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parent
 DATASET_NAME = "indoor_object_detection"
 DEFAULT_MODEL = "yolov8n.pt"
+DEFAULT_LV3_NAME = "yolov8n"
 ULTRALYTICS_RUN_NAME = "yolo_train"
+
+
+def _resolve_lv3_name(model: str, lv3_name: str | None) -> str:
+    """Network tag for work_dirs; checkpoint paths (best.pt) use yolov8n, not 'best'."""
+    if lv3_name:
+        return lv3_name
+    p = Path(model)
+    if p.suffix == ".pt":
+        stem = p.stem
+        if stem.startswith("yolov8"):
+            return stem.replace(".", "_")
+        return DEFAULT_LV3_NAME
+    return p.stem.replace(".", "_")
 
 # =======================
 # ====== GLOBALS =========
@@ -604,7 +618,7 @@ def run_training(
     os.environ.setdefault("MPLBACKEND", "Agg")
 
     yaml_path = Path(data_yaml or DATA_YAML).resolve()
-    lv3 = lv3_name or Path(model).stem.replace(".", "_")
+    lv3 = _resolve_lv3_name(model, lv3_name)
     lv2 = (data_variation if data_variation is not None else lv2_name).strip() or "default"
     device_str = str(device) if device is not None and device != "" else str(DEVICE)
 

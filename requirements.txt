@@ -2,7 +2,8 @@
 torch>=2.0
 torchvision>=0.15
 numpy>=1.24
-Pillow>=10.0
+# Colab: Pillow 12.0 breaks Ultralytics (ImportError: _Ink). Use <12 or >=12.1.
+Pillow>=10.4,<12.0
 opencv-python>=4.8
 matplotlib>=3.7
 ipywidgets>=8.0

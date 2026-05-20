@@ -48,6 +48,8 @@ jupyter notebook docusketch_inddor_object_detection.ipynb
 
 Use a **GPU** for training. Notebook training uses `build_reports=False` (no OpenAI). Optional reports locally: `export OPENAI_API_KEY=...` and `python train_and_eval.py --reports` (interactive CLI).
 
+**Colab `ImportError: _Ink` from PIL:** run Setup again (Pillow is pinned to `<12`), then **Runtime → Restart session** and re-run from Setup.
+
 ## Google Colab
 
 1. **Runtime → Change runtime type → GPU**
